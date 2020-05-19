@@ -1,3 +1,10 @@
+dde-kwin (5.0.14.1) focal; urgency=medium
+
+  * Updated to 5.0.14.1 from the upstream.
+  * Adjusted Build-Deps
+
+ -- Arun Kumar Pariyar <expertaruncorp@gmail.com>  Tue, 19 May 2020 18:13:37 +0545
+
 dde-kwin (0.1.0-3) focal; urgency=high
 
   * Bumped to 0.1.0 with 106.patch and kwin-5.17 patch from archlinux
