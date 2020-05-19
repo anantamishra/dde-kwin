@@ -129,6 +129,12 @@ private:
 #ifdef USE_DBUS_MENU
 void Workspace::showWindowMenu(const QRect &pos, AbstractClient *cl)
 {
+    if (KWinUtils::Window::isDesktop(_menuClient) ||
+            KWinUtils::Window::isDock(_menuClient) ||
+            KWinUtils::instance()->isDeepinOverride(_menuClient)) {
+        return;
+    }
+
     QDBusInterface manager_interface(MenuDBusService, MenuDBusPath);
     QDBusReply<QDBusObjectPath> menu_path = manager_interface.call("RegisterMenu");
 
@@ -205,32 +211,43 @@ bool UserActionsMenu::isMenuClient(const AbstractClient *c) const
 
 void UserActionsMenu::show(const QRect &pos, const QWeakPointer<AbstractClient> &cl)
 {
-    QMenu menu;
 
-    _globalWindowMenu = &menu;
     _menuClient = cl.data();
 
-    for (const MenuItem &item : getMenuItemInfos(cl.data())) {
-        QAction *action = menu.addAction(item.text);
+    if (cl.isNull())
+        return;
 
-        action->setProperty("id", item.id);
-        action->setCheckable(item.isCheckable);
-        action->setChecked(item.checked);
-        action->setEnabled(item.enable);
+    if (isShown())
+        return;
+
+    if (KWinUtils::Window::isDesktop(_menuClient) ||
+            KWinUtils::Window::isDock(_menuClient) ||
+            KWinUtils::instance()->isDeepinOverride(_menuClient)) {
+        return;
     }
 
-    if (QStyle *s = QStyleFactory::create("dlight")) {
-        s->setParent(&menu);
-        menu.setStyle(s);
+    _globalWindowMenu.clear();
+    if (_globalWindowMenu.isNull()) {
+        _globalWindowMenu = new QMenu;
+
+        for (const MenuItem &item : getMenuItemInfos(cl.data())) {
+            QAction *action = _globalWindowMenu->addAction(item.text);
+
+            action->setProperty("id", item.id);
+            action->setCheckable(item.isCheckable);
+            action->setChecked(item.checked);
+            action->setEnabled(item.enable);
+        }
+
+        connect(_globalWindowMenu, &QMenu::triggered, _globalWindowMenu, [] (const QAction *action) {
+            MenuSlot::onMenuItemInvoked(action->property("id").toString(), action->isChecked(), _menuClient);
+        });
     }
 
-    connect(&menu, &QMenu::triggered, &menu, [] (const QAction *action) {
-        MenuSlot::onMenuItemInvoked(action->property("id").toString(), action->isChecked(), _menuClient);
-    });
-
-    menu.exec(pos.topLeft());
+    _globalWindowMenu->exec(pos.topLeft());
     _menuClient = nullptr;
 }
+
 void UserActionsMenu::close()
 {
     if (_globalWindowMenu) {

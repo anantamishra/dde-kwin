@@ -2,6 +2,7 @@ set(TARGET_NAME "kwin-xcb")
 
 find_package(Qt5Core REQUIRED)
 find_package(Qt5X11Extras REQUIRED)
+find_package(Qt5Qml REQUIRED)
 find_package(KF5Config REQUIRED)
 find_package(KF5WindowSystem REQUIRED)
 find_package(KF5CoreAddons REQUIRED)
@@ -10,36 +11,6 @@ if (${KF5WindowSystem_VERSION_MINOR} GREATER 45)
     add_definitions(-DKWINDOWSYSTEM_NO_QWIDGET)
 else()
     find_package(Qt5Widgets REQUIRED)
-endif()
-
-if (KWIN_VERSION)
-    message("kwin version: ${KWIN_VERSION}")
-    string(REPLACE "." ";" KWIN_VERSION_LIST ${KWIN_VERSION})
-    list(APPEND KWIN_VERSION_LIST 0 0 0 0)
-
-    if (NOT KWIN_VER_MAJ)
-        list(GET KWIN_VERSION_LIST 0 KWIN_VER_MAJ)
-    endif()
-
-    if (NOT KWIN_VER_MIN)
-        list(GET KWIN_VERSION_LIST 1 KWIN_VER_MIN)
-    endif()
-
-    if (NOT KWIN_VER_PAT)
-        list(GET KWIN_VERSION_LIST 2 KWIN_VER_PAT)
-    endif()
-
-    if (NOT KWIN_VER_BUI)
-        list(GET KWIN_VERSION_LIST 3 KWIN_VER_BUI)
-    endif()
-
-    add_definitions(
-        -DKWIN_VERSION_STR=\\"${KWIN_VERSION}\\"
-        -DKWIN_VERSION_MAJ=${KWIN_VER_MAJ}
-        -DKWIN_VERSION_MIN=${KWIN_VER_MIN}
-        -DKWIN_VERSION_PAT=${KWIN_VER_MIN}
-        -DKWIN_VERSION_BUI=${KWIN_VER_BUI}
-    )
 endif()
 
 add_library(
@@ -57,6 +28,7 @@ set_target_properties(
 target_link_libraries(
     ${TARGET_NAME}
     Qt5::Core
+    Qt5::Qml
     Qt5::X11Extras
     KF5::ConfigCore
     KF5::WindowSystem

@@ -96,7 +96,7 @@ static const QMap<QString, QString> AllDeepinWMKWinAccelsMap {
     { "maximize-horizontally", "Window Maximize Horizontal" },
     { "expose-all-windows", "ExposeAll" },
     { "expose-windows", "Expose" },
-    { "preview-workspace", "ShowDesktopGrid" },
+    { "preview-workspace", "ShowMultitasking" },
 };
 
 static const QMap<QString, QString> SpecialKeyMap = {
@@ -117,10 +117,10 @@ static const QMap<QString, QString> SpecialRequireShiftKeyMap = {
 DeepinWMFaker::DeepinWMFaker(QObject *parent)
     : QObject(parent)
     , m_windowSystem(KWindowSystem::self())
-    , m_deepinWMConfig(new KConfig(DeepinWMConfigName, KConfig::SimpleConfig))
+    , m_deepinWMConfig(new KConfig(DeepinWMConfigName, KConfig::CascadeConfig))
     , m_deepinWMGeneralGroup(new KConfigGroup(m_deepinWMConfig->group(DeepinWMGeneralGroupName)))
     , m_deepinWMWorkspaceBackgroundGroup(new KConfigGroup(m_deepinWMConfig->group(DeepinWMWorkspaceBackgroundGroupName)))
-    , m_kwinConfig(new KConfig(KWinConfigName, KConfig::SimpleConfig))
+    , m_kwinConfig(new KConfig(KWinConfigName, KConfig::CascadeConfig))
     , m_kwinCloseWindowGroup(new KConfigGroup(m_kwinConfig->group(KWinCloseWindowGroupName)))
     , m_kwinRunCommandGroup(new KConfigGroup(m_kwinConfig->group(KWinRunCommandGroupName)))
     , m_globalAccel(KGlobalAccel::self())
@@ -134,6 +134,7 @@ DeepinWMFaker::DeepinWMFaker(QObject *parent)
         Q_EMIT WorkspaceSwitched(m_currentDesktop, to);
         m_currentDesktop = to;
     });
+    connect(m_windowSystem, &KWindowSystem::numberOfDesktopsChanged, this, &DeepinWMFaker::workspaceCountChanged);
     connect(_gsettings_dde_appearance, &QGSettings::changed, this, &DeepinWMFaker::onGsettingsDDEAppearanceChanged);
     connect(_gsettings_dde_zone, &QGSettings::changed, this, &DeepinWMFaker::onGsettingsDDEZoneChanged);
 
@@ -187,6 +188,14 @@ bool DeepinWMFaker::compositingEnabled() const
 bool DeepinWMFaker::compositingPossible() const
 {
     return QDBusInterface(KWinDBusService, KWinDBusCompositorPath, KWinDBusCompositorInterface).property("compositingPossible").toBool();
+}
+
+bool DeepinWMFaker::compositingAllowSwitch() const
+{
+    if (qgetenv("KWIN_COMPOSE").startsWith("N"))
+        return false;
+
+    return m_kwinConfig->group("Compositing").readEntry("AllowSwitch", true);
 }
 
 bool DeepinWMFaker::zoneEnabled() const
@@ -306,6 +315,11 @@ void DeepinWMFaker::ChangeCurrentWorkspaceBackground(const QString &uri)
 int DeepinWMFaker::GetCurrentWorkspace() const
 {
     return m_windowSystem->currentDesktop();
+}
+
+int DeepinWMFaker::WorkspaceCount() const
+{
+    return m_windowSystem->numberOfDesktops();
 }
 
 void DeepinWMFaker::SetCurrentWorkspace(const int index)
@@ -667,6 +681,21 @@ void DeepinWMFaker::SetDecorationDeepinTheme(const QString &name)
 
 void DeepinWMFaker::setCompositingEnabled(bool on)
 {
+    if (!compositingAllowSwitch()) {
+        return;
+    }
+
+    if (on) {
+        // 记录opengl被标记为不安全的次数
+        if (m_kwinConfig->group("Compositing").readEntry<bool>("OpenGLIsUnsafe", false)) {
+            int count = m_kwinConfig->group("Compositing").readEntry<int>("OpenGLIsUnsafeCount", 0);
+            m_kwinConfig->group("Compositing").writeEntry("OpenGLIsUnsafeCount", count + 1);
+        }
+
+        // 确保3D特效一定能被开启
+        m_kwinConfig->group("Compositing").writeEntry("OpenGLIsUnsafe", false);
+    }
+
     m_kwinConfig->group("Compositing").writeEntry("Enabled", on);
     // 只同步配置文件，不要通知kwin重新加载配置
     m_kwinConfig->sync();
@@ -680,7 +709,8 @@ void DeepinWMFaker::setCompositingEnabled(bool on)
     else
         m_kwinUtilsInter->SuspendCompositor(1);
 
-    if (compositingEnabled() == on)
+    // !on 时说明再关闭窗口特效，关闭特效往往都能成功，因此不再需要判断是否成功（KWin中给出值时有些延迟，导致未能及时获取到值）
+    if (!on || compositingEnabled() == on)
         emit compositingEnabledChanged(on);
 }
 
@@ -805,6 +835,13 @@ QAction *DeepinWMFaker::accelAction(const QString accelKid) const
     action->setObjectName(accelKid);
     action->setProperty("componentName", GlobalAccelComponentName);
     action->setProperty("componentDisplayName", GlobalAccelComponentDisplayName);
+    //NOTE: this is from KGlobalAccel
+    //
+    //a isConfigurationAction shortcut combined with NoAutoloading will
+    //make it a foreign shortcut, which triggers a dbus signal sent to
+    //kglobalaccel when changed. this gives KWin the chance to listen for
+    //the externally shortcut changes and and allow effects to respond.
+    action->setProperty("isConfigurationAction", true);
 
     return action;
 }

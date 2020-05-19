@@ -20,20 +20,21 @@
  */
 
 #include "chameleon.h"
+#include "chameleonconfig.h"
 
 #include <KPluginFactory>
 
 K_PLUGIN_FACTORY_WITH_JSON(
-    BreezeDecoFactory,
+    ChameleonDecoFactory,
     "chameleon.json",
     registerPlugin<Chameleon>();
 )
 
-extern "C" {
-    Q_DECL_EXPORT QString kde_plugin_version()
-    {
-        return PROJECT_VERSION;
-    }
+__attribute__((constructor))
+static void _init_theme()
+{
+    // make sure atoms are initialized during the window manager startup stage
+    auto global_config = ChameleonConfig::instance();
 }
 
 #include "main.moc"

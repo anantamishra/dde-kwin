@@ -29,9 +29,12 @@
 #define KWIN_VERSION KWIN_VERSION_CHECK(KWIN_VERSION_MAJ, KWIN_VERSION_MIN, KWIN_VERSION_PAT, KWIN_VERSION_BUI)
 #endif
 
-class KWinUtils : public QObject
+class KWinUtilsPrivate;
+class Q_DECL_EXPORT KWinUtils : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool initialized READ isInitialized)
+
 public:
     enum MaximizeMode {
         MaximizeRestore    = 0, ///< The window is not maximized in any direction.
@@ -45,36 +48,52 @@ public:
         WindowMatch,
         WrapperIdMatch,
         FrameIdMatch,
-        InputIdMatch
+        InputIdMatch,
+        UnmanagedMatch
     };
 
-    explicit KWinUtils(QObject *parent = nullptr);
     ~KWinUtils();
 
+    static KWinUtils *instance();
     static QObject *findObjectByClassName(const QByteArray &name, const QObjectList &list);
 
     static int kwinBuildVersion();
     static int kwinRuntimeVersion();
 
     static QObject *workspace();
+    static QObject *compositor();
     static QObject *scripting();
+    static void scriptingRegisterObject(const QString& name, QObject* o);
     static QObject *tabBox();
     static QObject *cursor();
     static QObject *virtualDesktop();
 
     static QObjectList clientList();
+    static QObjectList unmanagedList();
     static QObject *findClient(Predicate predicate, quint32 window);
     static void clientUpdateCursor(QObject *client);
+    static void setClientDepth(QObject *client, int depth);
     static void defineWindowCursor(quint32 window, Qt::CursorShape cshape);
+    static void clientCheckNoBorder(QObject *client);
 
     static QFunctionPointer resolve(const char *symbol);
 
     static qulonglong getWindowId(const QObject *client, bool *ok = nullptr);
+    static int getWindowDepth(const QObject *client);
+    static QByteArray readWindowProperty(quint32 WId, quint32 atom, quint32 type);
+    static QByteArray readWindowProperty(const QObject *client, quint32 atom, quint32 type);
+    static void setWindowProperty(quint32 WId, quint32 atom, quint32 type, int format, const QByteArray &data);
+    static void setWindowProperty(const QObject *client, quint32 atom, quint32 type, int format, const QByteArray &data);
 
     static uint virtualDesktopCount();
     static uint currentVirtualDesktop();
 
+    static bool compositorIsActive();
+
     struct Window {
+        static bool isDesktop(const QObject *window);
+        static bool isDock(const QObject *window);
+
         static bool isFullMaximized(const QObject *window);
         static bool fullmaximizeWindow(QObject *window);
         static bool unmaximizeWindow(QObject *window);
@@ -97,15 +116,33 @@ public:
         static void performWindowOperation(QObject* window, const QString &opName, bool restricted = false);
     };
 
+    static quint32 internAtom(const QByteArray &name, bool only_if_exists);
+
     Q_INVOKABLE quint32 getXcbAtom(const QString &name, bool only_if_exists) const;
     Q_INVOKABLE bool isSupportedAtom(quint32 atom) const;
     Q_INVOKABLE QVariant getGtkFrame(const QObject *window) const;
+    Q_INVOKABLE bool isDeepinOverride(const QObject *window) const;
 
     Q_INVOKABLE QVariant getParentWindow(const QObject *window) const;
     Q_INVOKABLE QVariant isFullMaximized(const QObject *window) const;
     Q_INVOKABLE QVariant fullmaximizeWindow(QObject *window) const;
     Q_INVOKABLE QVariant unmaximizeWindow(QObject *window) const;
 
+    // enforce为false时表示只把属性加入到待添加列表，但是不设置_NET_SUPPORTED属性
+    Q_INVOKABLE void addSupportedProperty(quint32 atom, bool enforce = true);
+    // enforce为false时表示只把属性标记为待删除，但是不设置_NET_SUPPORTED属性
+    Q_INVOKABLE void removeSupportedProperty(quint32 atom, bool enforce = true);
+
+    Q_INVOKABLE void addWindowPropertyMonitor(quint32 property_atom);
+    Q_INVOKABLE void removeWindowPropertyMonitor(quint32 property_atom);
+
+    Q_INVOKABLE bool isCompositing();
+
+    // Warning: 调用 buildNativeSettings，会导致baseObject的QMetaObject对象被更改
+    // 无法使用QMetaObject::cast，不能使用QObject::findChild等接口查找子类，也不能使用qobject_cast转换对象指针类型
+    Q_INVOKABLE bool buildNativeSettings(QObject *baseObject, quint32 windowID);
+
+    bool isInitialized() const;
 public Q_SLOTS:
     void WalkThroughWindows();
     void WalkBackThroughWindows();
@@ -117,6 +154,22 @@ public Q_SLOTS:
     void ShowWindowsView();
     void ResumeCompositor(int type);
     void SuspendCompositor(int type);
+
+Q_SIGNALS:
+    void initialized();
+    void windowPropertyChanged(quint32 windowId, quint32 property_atom);
+    void windowShapeChanged(quint32 windowId);
+
+protected:
+    explicit KWinUtils(QObject *parent = nullptr);
+
+    KWinUtilsPrivate *d;
+
+private:
+    void setInitialized();
+
+    friend class Mischievous;
+    Q_PRIVATE_SLOT(d, void _d_onPropertyChanged(long))
 };
 
 #endif // KWINUTILS_H

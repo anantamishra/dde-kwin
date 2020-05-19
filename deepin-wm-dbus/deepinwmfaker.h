@@ -17,6 +17,7 @@ class DeepinWMFaker : public QObject, protected QDBusContext
     Q_OBJECT
 
     Q_PROPERTY(bool compositingEnabled READ compositingEnabled WRITE setCompositingEnabled NOTIFY compositingEnabledChanged)
+    Q_PROPERTY(bool compositingAllowSwitch READ compositingAllowSwitch FINAL)
     Q_PROPERTY(bool compositingPossible READ compositingPossible)
     Q_PROPERTY(bool zoneEnabled READ zoneEnabled WRITE setZoneEnabled)
     Q_PROPERTY(QString cursorTheme READ cursorTheme WRITE setCursorTheme)
@@ -56,6 +57,7 @@ public:
 
     bool compositingEnabled() const;
     bool compositingPossible() const;
+    bool compositingAllowSwitch() const;
     bool zoneEnabled() const;
 
     QString cursorTheme() const;
@@ -73,6 +75,7 @@ public Q_SLOTS:
 #endif
 
     int GetCurrentWorkspace() const;
+    int WorkspaceCount() const;
     void SetCurrentWorkspace(const int index);
     void NextWorkspace();
     void PreviousWorkspace();
@@ -123,6 +126,8 @@ Q_SIGNALS:
     void wmCompositingEnabledChanged(bool compositingEnabled);
     // 只在由此DBus调用引起的窗管混成变化时发出
     void compositingEnabledChanged(bool compositingEnabled);
+    // 工作区个数
+    void workspaceCountChanged(int count);
 
 private:
     QAction *accelAction(const QString accelKid) const;
