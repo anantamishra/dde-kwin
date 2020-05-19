@@ -1,8 +1,7 @@
 Source: dde-kwin
 Section: devel
 Priority: optional
-Maintainer: Arun Kumar Pariyar <expertaruncorp@gmail.com>
-XSBC-Original-Maintainer: Deepin Packages Builder <packages@deepin.com>
+Maintainer: Deepin Packages Builder <packages@deepin.com>
 Build-Depends: debhelper (>=9),
  cmake,
  qtbase5-dev,
@@ -22,9 +21,14 @@ Build-Depends: debhelper (>=9),
  libxrender-dev,
  libmtdev-dev,
  qttools5-dev-tools,
+ qttools5-dev,
  deepin-gettext-tools,
  extra-cmake-modules,
- libkdecorations2-dev
+ libkdecorations2-dev,
+ libkf5wayland-dev,
+ libkf5i18n-dev,
+ qtdeclarative5-dev,
+ libdtkgui-dev
 Standards-Version: 3.9.8
 Homepage: https://github.com/linuxdeepin/dde-kwin
 

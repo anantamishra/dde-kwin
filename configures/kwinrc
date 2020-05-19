@@ -1,5 +1,6 @@
 [Plugins]
-blurEnabled=true
+#默认使用com.deepin.blur
+blurEnabled=false
 enforcedecoEnabled=false
 minimizeallEnabled=true
 kwin4_effect_dialogparentEnabled=false
@@ -39,10 +40,10 @@ ActivitiesMode=1
 ApplicationsMode=0
 DesktopMode=1
 HighlightWindows=true
-LayoutName=chameleon
+LayoutName=thumbnail_grid
 MinimizedMode=0
 MultiScreenMode=0
-ShowDesktopMode=0
+ShowDesktopMode=1
 ShowTabBox=true
 SwitchingMode=0
 BorderActivate=9

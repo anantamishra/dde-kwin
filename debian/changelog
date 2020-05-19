@@ -1,9 +1,3 @@
-dde-kwin (0.1.0-3) focal; urgency=high
-
-  * Bumped to 0.1.0 with 106.patch and kwin-5.17 patch from archlinux
-
- -- Arun Kumar Pariyar <expertaruncorp@gmail.com>  Sun, 12 Apr 2020 19:15:26 +0545
-
 dde-kwin (0.0.1-1) unstable; urgency=medium
 
   * Initial release

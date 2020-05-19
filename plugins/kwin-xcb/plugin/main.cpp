@@ -28,10 +28,14 @@
 #include <qpa/qplatformintegration.h>
 #include <private/qguiapplication_p.h>
 
+#include <DPlatformHandle>
+
 #include <QDebug>
 #include <QProcess>
 #include <QPluginLoader>
 #include <QDir>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QDBusConnection>
 
 QT_BEGIN_NAMESPACE
@@ -52,7 +56,7 @@ void RegisterDDESession()
 }
 
 class Mischievous;
-class  Mischievous : public QObject
+class Mischievous : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QObject *workspace READ workspace)
@@ -75,9 +79,22 @@ public:
 
     KWinUtils *kwinUtils() const
     {
-        static KWinUtils *utils = new KWinUtils(const_cast<Mischievous*>(this));
+        return KWinUtils::instance();
+    }
 
-        return utils;
+    Q_INVOKABLE void enableDxcb(QQuickItem *item)
+    {
+        QQuickWindow *window = item->window();
+        enableDxcbWindow(window);
+    }
+
+    Q_INVOKABLE void enableDxcbWindow(QQuickWindow *window)
+    {
+        if (!window)
+            return;
+
+        DPlatformHandle handle(window);
+        handle.setEnableBlurWindow(true);
     }
 
     Q_INVOKABLE QObject *require(const QString &module)
@@ -169,8 +186,6 @@ public:
 
 public slots:
     void init() {
-        // 通知startdde kwin启动完成
-        RegisterDDESession();
 
         if (!KWinUtils::scripting())
             return;
@@ -188,6 +203,8 @@ public slots:
         if (qmlWorkspaceWrapper) {
             qmlWorkspaceWrapper->setProperty("__dde__", QVariant::fromValue(this));
         }
+
+        KWinUtils::scriptingRegisterObject(QStringLiteral("dde"), this);
 
         // 注册 dbus 对象 提供更多的 kwin 相关接口
         new KWinAdaptor(kwinUtils());
@@ -238,6 +255,15 @@ public slots:
                 ts_fallback_file.clear();
             }
         }
+
+        // 通知程序初始化完成
+        kwinUtils()->setInitialized();
+
+        // 通知startdde kwin启动完成
+        //
+        // 必须在KWinUtils初始化之后，如果使用了chameleontheme，
+        // 其初始化必须在通知startdde之前完成
+        RegisterDDESession();
     }
 
     void onExec() {

@@ -1,6 +1,7 @@
 <interface name="com.deepin.wm">
     <property name="compositingEnabled" type="b" access="readwrite"/>
     <property name="compositingPossible" type="b" access="read"/>
+    <property name="compositingAllowSwitch" type="b" access="read"/>
     <property name="zoneEnabled" type="b" access="readwrite"/>
     <property name="cursorTheme" type="s" access="readwrite"/>
     <property name="cursorSize" type="i" access="readwrite"/>
@@ -58,6 +59,9 @@
     <method name="GetCurrentWorkspace">
         <arg type="i" name="index" direction="out"/>
     </method>
+    <method name="WorkspaceCount">
+        <arg type="i" name="count" direction="out"/>
+    </method>
     <method name="SetCurrentWorkspace">
         <arg type="i" name="index" direction="in"/>
     </method>
@@ -102,6 +106,9 @@
     </signal>
     <signal name="wmCompositingEnabledChanged">
         <arg type="b" name="enabled"/>
+    </signal>
+    <signal name="workspaceCountChanged">
+        <arg type="i" name="count"/>
     </signal>
 
     ${DEEPIN_WM_PREFIX}

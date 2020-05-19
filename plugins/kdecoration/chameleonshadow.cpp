@@ -19,6 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "chameleonshadow.h"
+#include "chameleontheme.h"
 
 #include <QPainter>
 #include <QDebug>
@@ -33,20 +34,50 @@ ChameleonShadow *ChameleonShadow::instance()
     return _global_cs;
 }
 
-QSharedPointer<KDecoration2::DecorationShadow> ChameleonShadow::getShadow(const Chameleon *client)
+QString ChameleonShadow::buildShadowCacheKey(const ChameleonTheme::DecorationConfig *config, qreal scale)
 {
-    auto window_radius = client->windowRadius();
-    auto shadow_offset = client->shadowOffset();
-    QColor shadow_color = client->shadowColor();
-    int shadow_size = client->shadowRadius();
+    auto window_radius = config->windowRadius * scale;
+    auto shadow_offset = config->shadowOffset;
+    QColor shadow_color = config->shadowColor;
+    int shadow_size = config->shadowRadius;
+    qreal border_width = config->borderWidth;
+    QColor border_color = config->borderColor;
 
-    const QMargins &paddings = QMargins(shadow_size - shadow_offset.x() - window_radius.first,
-                                        shadow_size - shadow_offset.y() - window_radius.second,
-                                        shadow_size - window_radius.first,
-                                        shadow_size - window_radius.second);
-    const QString key = QString("%1_%2.%3_%4_%5_%6.%7").arg(qRound(window_radius.first)).arg(qRound(window_radius.second))
-                                                       .arg(paddings.left()).arg(paddings.top()).arg(paddings.right()).arg(paddings.bottom())
-                                                       .arg(shadow_color.name(QColor::HexArgb));
+    const QPointF shadow_overlap(qMax(window_radius.x(), 3.0), qMax(window_radius.y(), 3.0));
+    const QMargins &paddings = QMargins(shadow_size - shadow_offset.x() - shadow_overlap.x(),
+                                        shadow_size - shadow_offset.y() - shadow_overlap.y(),
+                                        shadow_size - shadow_overlap.x(),
+                                        shadow_size - shadow_overlap.y());
+
+    return QString("%1_%2.%3_%4_%5_%6.%7.%8.%9").arg(qRound(window_radius.x())).arg(qRound(window_radius.y()))
+                                                .arg(paddings.left()).arg(paddings.top()).arg(paddings.right()).arg(paddings.bottom())
+                                                .arg(shadow_color.name(QColor::HexArgb))
+                                                .arg(border_width).arg(border_color.name());
+}
+
+QSharedPointer<KDecoration2::DecorationShadow> ChameleonShadow::getShadow(const ChameleonTheme::DecorationConfig *config, qreal scale)
+{
+    if ((config->shadowColor.alpha() == 0 || qIsNull(config->shadowRadius))
+            && (config->borderColor.alpha() == 0 || qIsNull(config->borderWidth))) {
+        return m_emptyShadow;
+    }
+
+    bool no_shadow = config->shadowColor.alpha() == 0 || qIsNull(config->shadowRadius);
+
+    auto window_radius = config->windowRadius * scale;
+    auto shadow_offset = config->shadowOffset;
+    QColor shadow_color = config->shadowColor;
+    // 因为阴影区域会抹除窗口圆角区域，所以阴影大小需要额外加上窗口圆角大小
+    int shadow_size = config->shadowRadius + window_radius.x() + window_radius.y();
+    qreal border_width = config->borderWidth;
+    QColor border_color = config->borderColor;
+
+    const QPointF shadow_overlap(qMax(window_radius.x(), 3.0), qMax(window_radius.y(), 3.0));
+    const QMargins &paddings = QMargins(shadow_size - shadow_offset.x() - shadow_overlap.x(),
+                                        shadow_size - shadow_offset.y() - shadow_overlap.y(),
+                                        shadow_size - shadow_overlap.x(),
+                                        shadow_size - shadow_overlap.y());
+    const QString key = buildShadowCacheKey(config, scale);
     auto shadow = m_shadowCache.value(key);
 
     if (!shadow) {
@@ -55,42 +86,69 @@ QSharedPointer<KDecoration2::DecorationShadow> ChameleonShadow::getShadow(const 
         QImage image(2 * shadow_size, 2 * shadow_size, QImage::Format_ARGB32_Premultiplied);
         image.fill(Qt::transparent);
 
-        // create gradient
-        // gaussian delta function
-        auto alpha = [](qreal x) { return std::exp(-x * x / 0.15); };
+        if (!no_shadow) {
+            // create gradient
+            // gaussian delta function
+            auto alpha = [](qreal x) { return std::exp(-x * x / 0.15); };
 
-        // color calculation delta function
-        auto gradientStopColor = [] (QColor color, int alpha) {
-            color.setAlpha(alpha);
-            return color;
-        };
+            // color calculation delta function
+            auto gradientStopColor = [] (QColor color, int alpha) {
+                color.setAlpha(alpha);
+                return color;
+            };
 
-        QRadialGradient radialGradient(shadow_size, shadow_size, shadow_size);
+            QRadialGradient radialGradient(shadow_size, shadow_size, shadow_size);
 
-        for(int i = 0; i < 10; ++i) {
-            const qreal x(qreal(i) / 9);
-            radialGradient.setColorAt(x, gradientStopColor(shadow_color, alpha(x) * shadowStrength * 0.6));
+            for(int i = 0; i < 10; ++i) {
+                const qreal x(qreal(i) / 9);
+                radialGradient.setColorAt(x, gradientStopColor(shadow_color, alpha(x) * shadowStrength * 0.6));
+            }
+
+            radialGradient.setColorAt(1, gradientStopColor(shadow_color, 0));
+
+            // fill
+            QPainter painter(&image);
+            painter.setRenderHint( QPainter::Antialiasing, true);
+            painter.fillRect(image.rect(), radialGradient);
         }
 
-        radialGradient.setColorAt(1, gradientStopColor(shadow_color, 0));
-
-        // fill
-        QPainter painter(&image);
-        painter.setRenderHint( QPainter::Antialiasing, true);
-        painter.fillRect(image.rect(), radialGradient);
-
         // contrast pixel
-        QRectF innerRect = QRectF(shadow_size - shadow_offset.x() - window_radius.first,
-                                  shadow_size - shadow_offset.y() - window_radius.second,
-                                  shadow_offset.x() + window_radius.first + window_radius.second,
-                                  shadow_offset.y() + window_radius.first + window_radius.second);
+        QRectF innerRect = QRectF(shadow_size - shadow_offset.x() - shadow_overlap.x(),
+                                  shadow_size - shadow_offset.y() - shadow_overlap.y(),
+                                  shadow_offset.x() + 2 * shadow_overlap.x(),
+                                  shadow_offset.y() + 2 * shadow_overlap.y());
 
-        // mask out inner rect
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(Qt::black);
-        painter.setCompositionMode(QPainter::CompositionMode_DestinationOut);
-        painter.drawRoundedRect(innerRect, 0.5 + window_radius.first, 0.5 + window_radius.second);
-        painter.end();
+        QPainter painter(&image);
+
+        if (window_radius.x() > 0 && window_radius.y() > 0) {
+            painter.setRenderHint(QPainter::Antialiasing, true);
+        }
+
+        if (border_width > 0 && border_color.alpha() != 0) {
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            // 绘制path是沿着路径外圈绘制，所以此处应该+1才能把border绘制到窗口边缘
+            painter.setPen(QPen(border_color, border_width + 1));
+            painter.setBrush(Qt::NoBrush);
+
+            if (window_radius.x() > 0 && window_radius.y() > 0) {
+                painter.drawRoundedRect(innerRect, 0.5 + window_radius.x(), 0.5 + window_radius.y());
+            } else {
+                painter.drawRect(innerRect);
+            }
+        }
+
+        if (!no_shadow) {
+            // mask out inner rect
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(Qt::black);
+            painter.setCompositionMode(QPainter::CompositionMode_DestinationOut);
+
+            if (window_radius.x() > 0 && window_radius.y() > 0) {
+                painter.drawRoundedRect(innerRect, 0.5 + window_radius.x(), 0.5 + window_radius.y());
+            } else {
+                painter.drawRect(innerRect);
+            }
+        }
 
         shadow = QSharedPointer<KDecoration2::DecorationShadow>::create();
         shadow->setPadding(paddings);
@@ -103,7 +161,12 @@ QSharedPointer<KDecoration2::DecorationShadow> ChameleonShadow::getShadow(const 
     return shadow;
 }
 
+void ChameleonShadow::clearCache()
+{
+    m_shadowCache.clear();
+}
+
 ChameleonShadow::ChameleonShadow()
 {
-
+    m_emptyShadow = QSharedPointer<KDecoration2::DecorationShadow>::create();
 }
